@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Paint-подібний Конструктор</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    #toolbar {
+      background: #ececec; border-bottom: 1px solid #ccc; padding: 5px; display: flex; align-items: center;
+    }
+    .tool-btn {
+      width: 32px; height: 32px; margin-right: 5px; background: #fff; border: 1px solid #aaa; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tool-btn.active { background: #ddd; }
+    #color-picker, #fill-color-picker { margin-right: 10px; }
+    #size-range { width: 100px; margin-right: 10px; }
+    #canvas-container { flex: 1; position: relative; }
+    canvas { background: #fff; display: block; width: 100%; height: 100%; cursor: crosshair; }
+    #clearBtn, #undoBtn { margin-right: 5px; padding: 5px 10px; cursor: pointer; border: 1px solid #aaa; background: #fff; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <div id="brushBtn" class="tool-btn active" title="Кисть">🖌️</div>
+    <div id="eraserBtn" class="tool-btn" title="Гумка">🧽</div>
+    <div id="lineBtn" class="tool-btn" title="Лінія">📏</div>
+    <div id="rectBtn" class="tool-btn" title="Прямокутник">▭</div>
+    <div id="ellipseBtn" class="tool-btn" title="Еліпс">⚪</div>
+    <div id="bucketBtn" class="tool-btn" title="Заливка">🪣</div>
+    <input type="color" id="color-picker" title="Колір контуру" value="#000000">
+    <input type="color" id="fill-color-picker" title="Колір заливки" value="#ff0000">
+    <input type="range" id="size-range" min="1" max="50" value="5" title="Розмір кисті/гумки">
+    <button id="undoBtn">Скасувати</button>
+    <button id="clearBtn">Очистити</button>
+  </div>
+  <div id="canvas-container">
+    <canvas id="drawCanvas"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('drawCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      if (history.length) {
+        ctx.putImageData(history[history.length - 1], 0, 0);
+      }
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    let w, h;
+    let tool = 'brush';
+    let drawing = false;
+    let startX = 0, startY = 0;
+    let history = [];
+
+    const tools = {
+      brushBtn: 'brush', eraserBtn: 'eraser', lineBtn: 'line', rectBtn: 'rect', ellipseBtn: 'ellipse', bucketBtn: 'bucket'
+    };
+    Object.keys(tools).forEach(id => {
+      document.getElementById(id).onclick = () => {
+        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        tool = tools[id];
+      };
+    });
+
+    const colorPicker = document.getElementById('color-picker');
+    const fillPicker = document.getElementById('fill-color-picker');
+    const sizeRange = document.getElementById('size-range');
+    const undoBtn = document.getElementById('undoBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    function saveState() {
+      history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      if (history.length > 20) history.shift();
+    }
+
+    undoBtn.onclick = () => {
+      if (history.length) ctx.putImageData(history.pop(), 0, 0);
+    };
+
+    clearBtn.onclick = () => {
+      saveState();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+
+    function getMousePos(e) {
+      const rect = canvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    canvas.onmousedown = e => {
+      drawing = true;
+      const pos = getMousePos(e);
+      startX = pos.x;
+      startY = pos.y;
+      saveState();
+      if (tool === 'bucket') floodFill(pos.x, pos.y, hexToRgba(fillPicker.value));
+    };
+
+    canvas.onmousemove = e => {
+      if (!drawing || tool === 'bucket') return;
+      const pos = getMousePos(e);
+      ctx.lineWidth = sizeRange.value;
+      ctx.strokeStyle = (tool === 'eraser') ? '#ffffff' : colorPicker.value;
+      ctx.fillStyle = fillPicker.value;
+
+      if (tool === 'brush' || tool === 'eraser') {
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        startX = pos.x; startY = pos.y;
+      } else {
+        drawOverlay(pos.x, pos.y);
+      }
+    };
+
+    canvas.onmouseup = e => {
+      if (!drawing) return;
+      drawing = false;
+      const pos = getMousePos(e);
+      if (['line','rect','ellipse'].includes(tool)) {
+        ctx.lineWidth = sizeRange.value;
+        ctx.strokeStyle = colorPicker.value;
+        ctx.fillStyle = fillPicker.value;
+        ctx.beginPath();
+        if (tool === 'line') {
+          ctx.moveTo(startX, startY); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+        } else if (tool === 'rect') {
+          ctx.rect(startX, startY, pos.x - startX, pos.y - startY); ctx.fill(); ctx.stroke();
+        } else if (tool === 'ellipse') {
+          ctx.ellipse((startX + pos.x)/2, (startY + pos.y)/2, Math.abs(pos.x - startX)/2, Math.abs(pos.y - startY)/2, 0, 0, 2*Math.PI);
+          ctx.fill(); ctx.stroke();
+        }
+      }
+    };
+
+    function drawOverlay(x, y) {
+      ctx.putImageData(history[history.length - 1], 0, 0);
+      ctx.strokeStyle = colorPicker.value;
+      ctx.fillStyle = fillPicker.value;
+      ctx.beginPath();
+      if (tool === 'line') { ctx.moveTo(startX, startY); ctx.lineTo(x, y); ctx.stroke(); }
+      else if (tool === 'rect') { ctx.rect(startX, startY, x - startX, y - startY); ctx.fill(); ctx.stroke(); }
+      else if (tool === 'ellipse') { ctx.ellipse((startX + x)/2, (startY + y)/2, Math.abs(x - startX)/2, Math.abs(y - startY)/2, 0, 0, 2*Math.PI); ctx.fill(); ctx.stroke(); }
+    }
+
+    function floodFill(x, y, color) {
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const target = getPixel(img, x, y);
+      if (colorsMatch(target, color)) return;
+      const stack = [{ x, y }];
+      while (stack.length) {
+        const { x: px, y: py } = stack.pop();
+        if (!inBounds(px, py)) continue;
+        const idx = (py * img.width + px) * 4;
+        const curr = [img.data[idx], img.data[idx+1], img.data[idx+2], img.data[idx+3]];
+        if (!colorsMatch(curr, target)) continue;
+        setPixel(img, px, py, color);
+        stack.push({ x: px+1, y: py }, { x: px-1, y: py }, { x: px, y: py+1 }, { x: px, y: py-1 });
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+    function getPixel(img, x, y) { const idx=(y*img.width+x)*4; return [img.data[idx],img.data[idx+1],img.data[idx+2],img.data[idx+3]]; }
+    function setPixel(img,x,y,color){ const idx=(y*img.width+x)*4; [img.data[idx],img.data[idx+1],img.data[idx+2],img.data[idx+3]] = color; }
+    function colorsMatch(a,b){ return a[0]===b[0]&&a[1]===b[1]&&a[2]===b[2]&&a[3]===b[3]; }
+    function inBounds(x,y){ return x>=0&&y>=0&&x<canvas.width&&y<canvas.height; }
+    function hexToRgba(hex) { const c=hex.replace('#',''); const num=parseInt(c,16); return [num>>16,(num>>8)&255,num&255,255]; }
+
+    // Ініціалізація
+    history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    resizeCanvas();
+  </script>
+</body>
+</html>
