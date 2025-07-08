@@ -25,7 +25,6 @@
     .layer-controls select, .layer-controls input { margin-right: 5px; }
     #canvas-container { position: relative; flex: 1; background: #fff; overflow: hidden; cursor: crosshair; }
     canvas.layerCanvas, canvas.overlayCanvas, canvas.gridCanvas { position: absolute; left: 0; top: 0; }
-    /* Фільтри */
     #filter-controls { display: none; align-items: center; margin-left: 10px; }
     #filter-controls input { margin: 0 5px; }
   </style>
@@ -230,7 +229,7 @@
     function drawSelectionOverlay(){overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);overlayCtx.save();overlayCtx.scale(1,1);overlayCtx.putImageData(selection.data,selection.currentX,selection.currentY);overlayCtx.strokeStyle='blue';overlayCtx.lineWidth=1;overlayCtx.strokeRect(selection.currentX,selection.currentY,selection.width,selection.height);overlayCtx.restore();}
     function commitSelection(){const layer=layers[activeLayerIndex];layer.ctx.putImageData(selection.data,selection.currentX,selection.currentY);overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);selection=null;}
     function startTransform(x,y){if(!selection)return;selection.transforming=true;selection.transformStart={x,y};selection.origData=selection.data;}
-    function updateTransform(x,y){if(!selection||!selection.transforming)return; // placeholder for advanced transform }
+    function updateTransform(x,y){if(!selection||!selection.transforming)return;}
     function finalizeTransform(){if(!selection)return;selection.transforming=false;overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);}
     function hexToRgba(hex,alpha){const c=hex.replace('#','');const num=parseInt(c,16);return{r:num>>16,g:(num>>8)&255,b:num&255,a:parseFloat(alpha)};}
     invertBtn.onclick=()=>applyFilter('invert');grayscaleBtn.onclick=()=>applyFilter('grayscale');brightnessBtn.onclick=()=>{brightnessRange.style.display=brightnessRange.style.display==='inline'?'none':'inline';};brightnessRange.oninput=()=>applyFilter('brightness',parseInt(brightnessRange.value));contrastBtn.onclick=()=>{contrastRange.style.display=contrastRange.style.display==='inline'?'none':'inline';};contrastRange.oninput=()=>applyFilter('contrast',parseInt(contrastRange.value));
@@ -239,4 +238,3 @@
   </script>
 </body>
 </html>
-
